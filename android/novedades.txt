@@ -1,1 +1,1 @@
-Primera versión: curso nuevo por las paradas del metro de Varsovia, pronunciación con el micrófono, diálogos, laboratorio de sonidos y recordatorio diario.
+La app pregunta tu nombre al empezar y cada persona empieza de cero, para poder compartirla con amigos. Las 30 palabras de la app web solo se cargan si tú las pides.

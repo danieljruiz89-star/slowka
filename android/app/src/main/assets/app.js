@@ -40,15 +40,21 @@ function load() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) { s = null; }
   if (!s) {
-    s = { items: {}, racha: 0, mejor: 0, ultimo: "", xp: { d: "", n: 0 }, xpTotal: 0, unidades: {}, sonidos: {}, vel: 0.9, hora: "19:00", bienvenida: false, reto: false, historial: [] };
-    const P = window.PREVIO;
-    if (P && P.items) {
-      for (const [id, o] of Object.entries(P.items)) s.items[id] = { c: o.c | 0, v: !!o.v, p: o.p || today(), a: o.a | 0, f: o.f | 0, fs: 0 };
-      s.mejor = P.mejor | 0;
-    }
+    s = { items: {}, racha: 0, mejor: 0, ultimo: "", xp: { d: "", n: 0 }, xpTotal: 0, unidades: {}, sonidos: {}, vel: 0.9, hora: "19:00", bienvenida: false, reto: false, historial: [], nombre: "" };
   }
+  // La version 1.0 solo la uso Daniel: si ya habia pasado la bienvenida sin nombre, es el.
+  if (s.bienvenida && s.nombre == null) s.nombre = "Daniel";
   return s;
 }
+/* Las 30 palabras de la antigua app web de Daniel: solo si el las pide en la bienvenida. */
+function importPrevio() {
+  const P = window.PREVIO;
+  if (!P || !P.items) return;
+  for (const [id, o] of Object.entries(P.items)) S.items[id] = { c: o.c | 0, v: !!o.v, p: o.p || today(), a: o.a | 0, f: o.f | 0, fs: 0 };
+  S.mejor = Math.max(S.mejor, P.mejor | 0);
+}
+const nombre = () => S.nombre || "";
+const conNombre = (txt, n = nombre()) => n ? txt + ", " + n : txt;
 function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }
 function st(id) { return S.items[id] ||= { c: 0, v: false, p: today(), a: 0, f: 0, fs: 0 }; }
 
@@ -295,7 +301,7 @@ function renderHome() {
   view.innerHTML = `
   <div class="spread"><span class="pill ${streak ? "sun" : ""}">🔥 ${streak} ${streak === 1 ? "día" : "días"}</span><span class="pill leaf">🌼 ${master} dominadas</span><button class="link" id="ajustes" aria-label="Ajustes">⚙️ Ajustes</button></div>
   <div class="hero"><canvas id="meadow" aria-hidden="true"></canvas>
-    <div class="over"><h1>${greet}, Daniel.<small>${seen} palabras en tu jardín</small></h1></div></div>
+    <div class="over"><h1>${esc(conNombre(greet))}.<small>${seen} ${seen === 1 ? "palabra" : "palabras"} en tu jardín</small></h1></div></div>
   ${vozEstado === "falta" ? `<div class="card"><b>Falta la voz polaca en este móvil</b><p class="note">Sin ella no oirás las palabras. Abre los ajustes de voz, elige «Polski» y descárgala (funciona sin internet).</p><button class="go sky" id="voz">Abrir ajustes de voz</button></div>` : ""}
   <div class="card">
     <div class="today">
@@ -338,8 +344,12 @@ function renderWelcome() {
         <div class="pict">🚇</div>
         <h1 style="font-size:30px">Varsovia, parada a parada</h1>
         <p>Cada estación del metro es una situación de tu vida: la caja del súper, el médico, la oficina, tus vecinos… En cada una aprendes palabras, las <b>dices en voz alta</b> y el móvil te dice si te ha entendido.</p>
-        <p class="note">Ya traigo tus 30 palabras de antes, con su progreso.</p>
+        <label class="set" style="text-align:left"><b>¿Cómo te llamas?</b><input class="typein" id="nom" maxlength="24" autocomplete="given-name" placeholder="Tu nombre" value="${esc(S.nombre || "")}"></label>
+        <label class="row note" id="prevrow" style="text-align:left" hidden><input type="checkbox" id="prev" checked> Traer mis 30 palabras de la app web Słówka</label>
         <button class="go" id="nx">Vamos</button></div>`;
+      const nom = $("#nom"), row = $("#prevrow");
+      const upd = () => { row.hidden = fold(nom.value) !== "daniel" || !window.PREVIO; };
+      nom.addEventListener("input", upd); upd();
     } else if (paso === 1) {
       view.innerHTML = `<div class="step" style="text-align:center">
         <span class="label">Prueba el micrófono</span>
@@ -360,6 +370,11 @@ function renderWelcome() {
     }
     view.querySelector("[data-say]")?.addEventListener("click", () => {});
     $("#nx").addEventListener("click", () => {
+      if (paso === 0) {
+        S.nombre = $("#nom").value.trim().slice(0, 24);
+        if (!$("#prevrow").hidden && $("#prev").checked && !S.importado) { importPrevio(); S.importado = true; }
+        save();
+      }
       if (paso < 2) { paso++; paint(); return; }
       S.bienvenida = true; save();
       try { N?.recordatorio(S.hora); } catch (e) {}
@@ -609,7 +624,7 @@ function finishLesson() {
   view.innerHTML = `<div class="step" style="text-align:center">
     <span class="label">Lección terminada</span>
     <div class="big">+${L.xp} XP</div>
-    <h2>${res.length && ok === res.length ? pick(["¡Perfecto, Daniel!", "¡Rewelacja!"]) : "¡Buen trabajo!"}</h2>
+    <h2>${res.length && ok === res.length ? pick([conNombre("¡Perfecto") + "!", "¡Rewelacja!"]) : "¡Buen trabajo!"}</h2>
     <div class="row" style="justify-content:center"><span class="pill sun">🔥 ${streakNow()} ${streakNow() === 1 ? "día" : "días"}</span><span class="pill">🎯 ${xpToday()}/${META} hoy</span>${L.known.length ? `<span class="pill sky">✓ ${L.known.length} ya sabidas</span>` : ""}</div>
     ${res.length ? `<div class="results" style="text-align:left">${res.map(r => `<div class="res"><span class="e">${esc(r.w.emoji)}</span><span class="t"><b>${esc(r.w.pl)}</b><span>${esc(r.w.es)}</span></span><span class="m ${r.ok ? "up" : "down"}">${r.ok ? "↑ " + SHELF[r.after] : "↺ mañana"}</span></div>`).join("")}</div>` : ""}
     <button class="go" id="home">Seguir</button></div>`;
@@ -780,6 +795,7 @@ function renderSettings() {
   const vc = N ? N.versionCode() : 0, vn = N ? N.versionName() : "web";
   view.innerHTML = `
   <div class="top"><button class="x" id="back">←</button><span class="label">Ajustes</span></div>
+  <div class="card set"><b>Tu nombre</b><div class="row"><input class="typein" id="nom" maxlength="24" placeholder="Tu nombre" value="${esc(S.nombre || "")}" style="flex:1"><button id="nomok">Guardar</button></div></div>
   <div class="card set"><b>Recordatorio diario</b>
     <div class="row">${["08:00", "13:00", "19:00", "21:00"].map(h => `<button data-h="${h}" aria-pressed="${S.hora === h}">${h}</button>`).join("")}<button data-h="" aria-pressed="${!S.hora}">Sin aviso</button></div></div>
   <div class="card set"><b>Velocidad de la voz</b>
@@ -793,6 +809,7 @@ function renderSettings() {
     <button class="link" id="rel" style="justify-self:start">Ver versiones en GitHub</button></div>
   <p class="note" style="text-align:center">${all().filter(w => st(w.id).v).length} palabras vistas · ${S.xpTotal} XP en total · mejor racha ${S.mejor} días</p>`;
   $("#back").addEventListener("click", renderHome);
+  $("#nomok").addEventListener("click", () => { S.nombre = $("#nom").value.trim().slice(0, 24); save(); toast(S.nombre ? "Hola, " + S.nombre : "Nombre borrado"); });
   view.querySelectorAll("[data-h]").forEach(b => b.addEventListener("click", () => { S.hora = b.dataset.h; save(); try { N?.recordatorio(S.hora); } catch (e) {} toast(S.hora ? "Te aviso a las " + S.hora : "Sin recordatorio"); renderSettings(); }));
   view.querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", () => { S.vel = +b.dataset.v; save(); speak("Przepraszam, gdzie jest przystanek?"); renderSettings(); }));
   $("#prueba").addEventListener("click", () => speak("Przepraszam, gdzie jest przystanek?"));

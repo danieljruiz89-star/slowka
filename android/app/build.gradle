@@ -11,8 +11,8 @@ android {
         minSdk 24
         targetSdk 34
         // Sube versionCode en cada version: si no, Android no la ofrece como actualizacion.
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1'
     }
 
     // Siempre la misma llave (secret FIRMA_SLOWKA del repositorio, la descomprime el workflow en firma/).
