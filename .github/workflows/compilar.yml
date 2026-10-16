@@ -32,10 +32,10 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      # La llave vive solo en el secret FIRMA_SLOWKA (tar.gz en base64 con slowka.p12 y clave.txt).
+      # La llave vive solo en el secret FIRMA_SLOWKA (o POLACO, el nombre con que se creo): tar.gz en base64 con slowka.p12 y clave.txt.
       - name: Llave de firma
         env:
-          FIRMA: ${{ secrets.FIRMA_SLOWKA }}
+          FIRMA: ${{ secrets.FIRMA_SLOWKA || secrets.POLACO }}
         run: |
           if [ -z "$FIRMA" ]; then
             echo "::error::Falta el secret FIRMA_SLOWKA (Settings > Secrets and variables > Actions)."
