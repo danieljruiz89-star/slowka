@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'pl.daniel.slowka'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'pl.daniel.slowka'
+        minSdk 24
+        targetSdk 34
+        // Sube versionCode en cada version: si no, Android no la ofrece como actualizacion.
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // Siempre la misma llave (secret FIRMA_SLOWKA del repositorio, la descomprime el workflow en firma/).
+    // Si la firma cambia, Android no deja instalar encima y Daniel perderia su progreso.
+    signingConfigs {
+        slowka {
+            storeFile rootProject.file('../firma/slowka.p12')
+            storeType 'pkcs12'
+            storePassword System.getenv('SLOWKA_CLAVE') ?: ''
+            keyAlias 'slowka'
+            keyPassword System.getenv('SLOWKA_CLAVE') ?: ''
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.slowka
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

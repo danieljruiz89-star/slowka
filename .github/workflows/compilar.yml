@@ -1,0 +1,83 @@
+name: Compilar app
+
+on:
+  push:
+    branches: [main]
+  pull_request:   # solo comprueba que compila; publicar, solo desde main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Huella SHA-256 del certificado de Słówka. Todas las versiones deben llevar esta firma.
+  HUELLA: 02a53948256ae3111cedb867e21d2c5edc57a66a21c63043b356510eba8831d5
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # La llave vive solo en el secret FIRMA_SLOWKA (tar.gz en base64 con slowka.p12 y clave.txt).
+      - name: Llave de firma
+        env:
+          FIRMA: ${{ secrets.FIRMA_SLOWKA }}
+        run: |
+          if [ -z "$FIRMA" ]; then
+            echo "::error::Falta el secret FIRMA_SLOWKA (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          mkdir -p firma
+          echo "$FIRMA" | base64 -d | tar xz -C firma
+          echo "SLOWKA_CLAVE=$(cat firma/clave.txt)" >> $GITHUB_ENV
+          echo "::add-mask::$(cat firma/clave.txt)"
+
+      - name: Compilar
+        working-directory: android
+        run: gradle assembleRelease --no-daemon
+
+      # Si la APK no lleva la firma de siempre, el movil no la deja instalar encima (y se perderia el progreso).
+      - name: Comprobar la firma
+        run: |
+          got=$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk | grep 'SHA-256' | head -1 | awk '{print $NF}')
+          echo "firma esperada: $HUELLA"; echo "firma de la APK: $got"
+          if [ "$HUELLA" != "$got" ]; then echo "::error::La APK no lleva la firma de Słówka"; exit 1; fi
+
+      - name: Version
+        id: v
+        run: |
+          echo "name=$(grep versionName android/app/build.gradle | grep -o "'.*'" | tr -d "'")" >> $GITHUB_OUTPUT
+          echo "code=$(grep versionCode android/app/build.gradle | grep -o '[0-9]\+')" >> $GITHUB_OUTPUT
+          cp android/app/build/outputs/apk/release/app-release.apk Slowka.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Slowka-${{ steps.v.outputs.name }}
+          path: Slowka.apk
+
+      # Una version publicada por cada versionCode nuevo. La app la ve en releases/latest y ofrece Update.
+      - name: Publicar version
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.v.outputs.name }}-${{ steps.v.outputs.code }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" Slowka.apk --clobber
+          else
+            gh release create "$tag" Slowka.apk --title "Słówka ${{ steps.v.outputs.name }}" --notes-file android/novedades.txt
+          fi
